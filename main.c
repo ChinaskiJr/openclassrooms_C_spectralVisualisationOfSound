@@ -1,3 +1,13 @@
+/* SPECTRAL VISUALISATION OF CHINASKI'S MP3
+ *
+ * Proudly created by Chinaski      March 2018
+ *
+ * main.c
+ *
+ * USING FMOD & SDL LIBRARIES
+ *
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <SDL2/SDL.h>
@@ -17,6 +27,9 @@ int main(int argc, char *argv[]) {
 
     FMOD_RESULT result = 0;
     FMOD_SYSTEM *system = NULL;
+    FMOD_SOUND *music = NULL;
+    FMOD_CHANNEL *channel0 = NULL;
+    FMOD_BOOL *isPlaying = NULL;
 
     // SDL Initialization & renderer & window & black screen 
     if (0 != SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -50,7 +63,7 @@ int main(int argc, char *argv[]) {
     SDL_RenderPresent(renderer);
 
 
-    // FMOD's object creation & initialisation
+    // FMOD's object, channel & sound : creation & initialisation
     result = FMOD_System_Create(&system);
     if (result != FMOD_OK) {
         fprintf(stderr, "FMOD_System_Create Error : %s\n", FMOD_ErrorString(result));
@@ -63,12 +76,37 @@ int main(int argc, char *argv[]) {
         goto QuitFMOD;
     }
 
+    result = FMOD_System_GetChannel(system, 0, &channel0);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_System_GetChannel Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    // Load, play and send the mp3 to the channel
+    result = FMOD_System_CreateSound(system, "LeavingEarth.mp3", FMOD_CREATESTREAM, NULL, &music);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_System_CreateSound Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
     
-    SDL_Delay(4000);
+    result = FMOD_System_PlaySound(system, music, NULL, 0, &channel0);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_System_PlaySound Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    result = FMOD_Channel_IsPlaying(channel0, isPlaying);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_Channel_IsPlaying Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    SDL_Delay(400000);
     
     exitStatus = EXIT_SUCCESS;
 
 QuitFMOD:
+    FMOD_Sound_Release(music);
     FMOD_System_Close(system);
     FMOD_System_Release(system);
 
