@@ -14,12 +14,14 @@
 #include <FMOD/fmod.h>
 #include <FMOD/fmod_errors.h>
 
-#define WINDOW_WEIGHT   800
-#define WINDOW_HEIGHT   600
+#define WINDOW_WEIGHT         800
+#define WINDOW_HEIGHT         600
+#define SPECTRUM_ARRAY_SIZE   2048 
 
 int main(int argc, char *argv[]) {
 
     int exitStatus = EXIT_FAILURE;
+    int i = 0;
 
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
@@ -27,11 +29,15 @@ int main(int argc, char *argv[]) {
     SDL_Event event;
     SDL_bool quit = SDL_FALSE;
 
+    int tempsPrecedent = 0, tempsActuel = 0;
+
     FMOD_RESULT result = 0;
     FMOD_SYSTEM *system = NULL;
     FMOD_SOUND *music = NULL;
     FMOD_CHANNEL *channel0 = NULL;
     FMOD_BOOL *isPlaying = NULL;
+    FMOD_DSP *fftDSP = NULL;
+    FMOD_DSP_PARAMETER_FFT *fftParam = NULL;
 
     // SDL Initialization & renderer & window & black screen 
     if (0 != SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -84,6 +90,24 @@ int main(int argc, char *argv[]) {
         goto QuitFMOD;
     }
 
+    // DSP Initialization
+    result = FMOD_System_CreateDSPByType(system, FMOD_DSP_TYPE_FFT, &fftDSP);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_System_CreateDSPByType Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    result = FMOD_DSP_SetParameterInt(fftDSP, FMOD_DSP_FFT_WINDOWTYPE, FMOD_DSP_FFT_WINDOW_RECT);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_SetParameterInt Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    result = FMOD_DSP_SetParameterInt(fftDSP, FMOD_DSP_FFT_WINDOWSIZE, SPECTRUM_ARRAY_SIZE * 2);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_SetParameterInt Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
 
     while(!quit) {
         while (SDL_PollEvent(&event)) {
@@ -115,10 +139,39 @@ int main(int argc, char *argv[]) {
                                 fprintf(stderr, "FMOD_Channel_IsPlaying Error : %s\n", FMOD_ErrorString(result));
                                 goto QuitFMOD;
                             }
+
+                            // Get the Spectrum
+                            result = FMOD_Channel_AddDSP(channel0, 0, fftDSP);
+                            if (result != FMOD_OK) {
+                                fprintf(stderr, "FMOD_Channel_AddDSP : %s\n", FMOD_ErrorString(result));
+                                goto QuitFMOD;
+                            }
+
+                            result = FMOD_DSP_SetActive(fftDSP, 1);
+                            if (result != FMOD_OK) {
+                                fprintf(stderr, "FMOD_DSP_SetActive : %s\n", FMOD_ErrorString(result));
+                                goto QuitFMOD;
+                            }
+
+                            float spectrum[SPECTRUM_ARRAY_SIZE] = {0};
+
+                            result = FMOD_DSP_GetParameterData(fftDSP, FMOD_DSP_FFT_SPECTRUMDATA, (void**)&fftParam, NULL, NULL, 0);
+                            if (result != FMOD_OK) {
+                                fprintf(stderr, "FMOD_DSP_GetParameterData : %s\n", FMOD_ErrorString(result));
+                                goto QuitFMOD;
+                            }
+                            
+                            if (*fftParam->spectrum != NULL) {
+                                for (i = 0 ; i < SPECTRUM_ARRAY_SIZE ; i++) {
+                                    spectrum[i] = (fftParam->spectrum[0][i] + fftParam->spectrum[1][i] / 2);
+                                    printf("%f\n", spectrum[i]);
+                                }
+                            }      
+                            for (i = 0 ; i < SPECTRUM_ARRAY_SIZE ; i++) 
+                                fprintf(stderr, "%f\n", spectrum[i]);
+
                             break;
                     }
-
-
             }
         }
     }
