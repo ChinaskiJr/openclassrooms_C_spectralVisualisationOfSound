@@ -20,24 +20,25 @@
 
 int main(int argc, char *argv[]) {
 
-    int exitStatus = EXIT_FAILURE;
-    int i = 0;
+    int                     exitStatus = EXIT_FAILURE;
+    int                     i = 0;
+    int                     tempsPrecedent = 0, tempsActuel = 0;
 
-    SDL_Window *window = NULL;
-    SDL_Renderer *renderer = NULL;
-    SDL_Rect screen = {0, 0, WINDOW_WEIGHT, WINDOW_HEIGHT};
-    SDL_Event event;
-    SDL_bool quit = SDL_FALSE;
+    SDL_Window              *window = NULL;
+    SDL_Renderer            *renderer = NULL;
+    SDL_Rect                screen = {0, 0, WINDOW_WEIGHT, WINDOW_HEIGHT};
+    SDL_Event               event;
+    SDL_bool                quit = SDL_FALSE;
 
-    int tempsPrecedent = 0, tempsActuel = 0;
+    FMOD_RESULT             result = 0;
+    FMOD_SYSTEM             *system = NULL;
+    FMOD_SOUND              *music = NULL;
+    FMOD_CHANNEL            *channel0 = NULL;
+    FMOD_BOOL               isPlaying = 0; 
+    FMOD_DSP                *fftDSP = NULL;
+    FMOD_DSP_PARAMETER_FFT  *fftParam = NULL;
 
-    FMOD_RESULT result = 0;
-    FMOD_SYSTEM *system = NULL;
-    FMOD_SOUND *music = NULL;
-    FMOD_CHANNEL *channel0 = NULL;
-    FMOD_BOOL *isPlaying = NULL;
-    FMOD_DSP *fftDSP = NULL;
-    FMOD_DSP_PARAMETER_FFT *fftParam = NULL;
+    float                   spectrum[SPECTRUM_ARRAY_SIZE] = {0};
 
     // SDL Initialization & renderer & window & black screen 
     if (0 != SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -134,7 +135,7 @@ int main(int argc, char *argv[]) {
                                 goto QuitFMOD;
                             }
 
-                            result = FMOD_Channel_IsPlaying(channel0, isPlaying);
+                            result = FMOD_Channel_IsPlaying(channel0, &isPlaying);
                             if (result != FMOD_OK) {
                                 fprintf(stderr, "FMOD_Channel_IsPlaying Error : %s\n", FMOD_ErrorString(result));
                                 goto QuitFMOD;
@@ -152,28 +153,34 @@ int main(int argc, char *argv[]) {
                                 fprintf(stderr, "FMOD_DSP_SetActive : %s\n", FMOD_ErrorString(result));
                                 goto QuitFMOD;
                             }
-
-                            float spectrum[SPECTRUM_ARRAY_SIZE] = {0};
-
-                            result = FMOD_DSP_GetParameterData(fftDSP, FMOD_DSP_FFT_SPECTRUMDATA, (void**)&fftParam, NULL, NULL, 0);
-                            if (result != FMOD_OK) {
-                                fprintf(stderr, "FMOD_DSP_GetParameterData : %s\n", FMOD_ErrorString(result));
-                                goto QuitFMOD;
-                            }
-                            
-                            if (*fftParam->spectrum != NULL) {
-                                for (i = 0 ; i < SPECTRUM_ARRAY_SIZE ; i++) {
-                                    spectrum[i] = (fftParam->spectrum[0][i] + fftParam->spectrum[1][i] / 2);
-                                    printf("%f\n", spectrum[i]);
-                                }
-                            }      
-                            for (i = 0 ; i < SPECTRUM_ARRAY_SIZE ; i++) 
-                                fprintf(stderr, "%f\n", spectrum[i]);
-
                             break;
                     }
             }
         }
+
+        if (isPlaying) {
+            tempsActuel = SDL_GetTicks();
+            if (tempsActuel - tempsPrecedent > 25) {
+                result = FMOD_DSP_GetParameterData(fftDSP, FMOD_DSP_FFT_SPECTRUMDATA, (void**)&fftParam, NULL, NULL, 0);
+                if (result != FMOD_OK) {
+                    fprintf(stderr, "FMOD_DSP_GetParameterData : %s\n", FMOD_ErrorString(result));
+                    goto QuitFMOD;
+                }
+
+                if (*fftParam->spectrum != NULL) {
+                    for (i = 0 ; i < SPECTRUM_ARRAY_SIZE ; i++) {
+                        spectrum[i] = (fftParam->spectrum[0][i] + fftParam->spectrum[1][i] / 2);
+                        fprintf(stderr, "%f\n", 20 * spectrum[i]);  
+                    }
+                }   
+                tempsPrecedent = tempsActuel;
+            }
+            else 
+                SDL_Delay(25 - (tempsActuel - tempsPrecedent));
+        }
+
+        SDL_Delay(25);
+        
     }
 
     exitStatus = EXIT_SUCCESS;
