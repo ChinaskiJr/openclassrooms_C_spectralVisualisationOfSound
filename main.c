@@ -14,19 +14,18 @@
 #include <FMOD/fmod.h>
 #include <FMOD/fmod_errors.h>
 
-#define WINDOW_WIDTH          1024
-#define WINDOW_HEIGHT         800
-#define SPECTRUM_ARRAY_SIZE   1024
-#define RATIO_COLOR           (WINDOW_WIDTH / 255)
+#define WINDOW_WIDTH          512
+#define WINDOW_HEIGHT         512 
+#define SPECTRUM_ARRAY_SIZE   512
+#define RATIO_COLOR           (WINDOW_WIDTH / 255.0)
 
 int main(int argc, char *argv[]) {
 
     int                     exitStatus = EXIT_FAILURE;
-    int                     i = 0;
-    int                     tempsPrecedent = 0, tempsActuel = 0;
+    int                     i = 0, j = 0, k = 0;
+    int                     previousTime = 0, time = 0;
     int                     pitch = 0;
     int                     spectrumHeight = 0;
-    size_t                  j = 0, k = 0;
     void                    *tmp;
     float                   spectrum[SPECTRUM_ARRAY_SIZE] = {0};
     Uint32                  pixels[WINDOW_WIDTH * WINDOW_HEIGHT];
@@ -65,6 +64,14 @@ int main(int argc, char *argv[]) {
         goto QuitSDL;
     }
 
+    spectrumTxtr = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH, WINDOW_HEIGHT);
+    if (spectrumTxtr == NULL) {
+        fprintf(stderr, "SDL_CreateTexture Error : %s\n", SDL_GetError());
+        goto QuitSDL;
+    }
+
+    format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
+
     if (0 != SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255)) {
         fprintf(stderr, "SDL_SetRenderDrawColor Error : %s\n", SDL_GetError());
         goto QuitSDL;
@@ -75,9 +82,7 @@ int main(int argc, char *argv[]) {
         goto QuitSDL;
     }
 
-
     SDL_RenderPresent(renderer);
-
 
     // FMOD's object, channel & sound : creation & initialisation
     result = FMOD_System_Create(&system);
@@ -116,8 +121,49 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "FMOD_SetParameterInt Error : %s\n", FMOD_ErrorString(result));
         goto QuitFMOD;
     }
+    // Load, play and send the mp3 to the channel
+    result = FMOD_System_CreateSound(system, "hype_home.mp3", FMOD_CREATESTREAM, NULL, &music);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_System_CreateSound Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    result = FMOD_System_PlaySound(system, music, NULL, 0, &channel0);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_System_PlaySound Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    result = FMOD_Channel_IsPlaying(channel0, &isPlaying);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_Channel_IsPlaying Error : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    // Set the Spectrum
+    result = FMOD_Channel_AddDSP(channel0, 0, fftDSP);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_Channel_AddDSP : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
+
+    result = FMOD_DSP_SetActive(fftDSP, 1);
+    if (result != FMOD_OK) {
+        fprintf(stderr, "FMOD_DSP_SetActive : %s\n", FMOD_ErrorString(result));
+        goto QuitFMOD;
+    }
 
     while(!quit) {
+
+        for (i = 0 ; i < WINDOW_WIDTH * WINDOW_HEIGHT ; i++) 
+            pixels[i] = SDL_MapRGBA(format, 0, 0, 0, 255);
+
+        if (0 != SDL_UpdateTexture(spectrumTxtr, NULL, pixels, sizeof(Uint32) * WINDOW_WIDTH)) {
+            fprintf(stderr, "SDL_UpdateTexture Error : %s\n", SDL_GetError());
+            goto QuitSDL;
+        }
+        SDL_RenderCopy(renderer, spectrumTxtr, NULL, NULL);
+
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
                 case SDL_QUIT:
@@ -128,47 +174,16 @@ int main(int argc, char *argv[]) {
                         case SDLK_ESCAPE:
                             quit = SDL_TRUE;
                             break;
-                        case SDLK_SPACE:
-                            // Load, play and send the mp3 to the channel
-                            result = FMOD_System_CreateSound(system, "LeavingEarth.mp3", FMOD_CREATESTREAM, NULL, &music);
-                            if (result != FMOD_OK) {
-                                fprintf(stderr, "FMOD_System_CreateSound Error : %s\n", FMOD_ErrorString(result));
-                                goto QuitFMOD;
-                            }
-
-                            result = FMOD_System_PlaySound(system, music, NULL, 0, &channel0);
-                            if (result != FMOD_OK) {
-                                fprintf(stderr, "FMOD_System_PlaySound Error : %s\n", FMOD_ErrorString(result));
-                                goto QuitFMOD;
-                            }
-
-                            result = FMOD_Channel_IsPlaying(channel0, &isPlaying);
-                            if (result != FMOD_OK) {
-                                fprintf(stderr, "FMOD_Channel_IsPlaying Error : %s\n", FMOD_ErrorString(result));
-                                goto QuitFMOD;
-                            }
-
-                            // Set the Spectrum
-                            result = FMOD_Channel_AddDSP(channel0, 0, fftDSP);
-                            if (result != FMOD_OK) {
-                                fprintf(stderr, "FMOD_Channel_AddDSP : %s\n", FMOD_ErrorString(result));
-                                goto QuitFMOD;
-                            }
-
-                            result = FMOD_DSP_SetActive(fftDSP, 1);
-                            if (result != FMOD_OK) {
-                                fprintf(stderr, "FMOD_DSP_SetActive : %s\n", FMOD_ErrorString(result));
-                                goto QuitFMOD;
-                            }
-                            break;
                     }
+
             }
         }
 
         if (isPlaying) {
-            tempsActuel = SDL_GetTicks();
+
+            time = SDL_GetTicks();
             // Get the Spectrum
-            if (tempsActuel - tempsPrecedent > 25) {
+            if (time - previousTime > 25) {
                 result = FMOD_DSP_GetParameterData(fftDSP, FMOD_DSP_FFT_SPECTRUMDATA, (void**)&fftParam, NULL, NULL, 0);
                 if (result != FMOD_OK) {
                     fprintf(stderr, "FMOD_DSP_GetParameterData : %s\n", FMOD_ErrorString(result));
@@ -178,44 +193,33 @@ int main(int argc, char *argv[]) {
                 if (*fftParam->spectrum != NULL) {
                     for (i = 0 ; i < SPECTRUM_ARRAY_SIZE ; i++) {
                         spectrum[i] = (fftParam->spectrum[0][i] + fftParam->spectrum[1][i] / 2);
-                        spectrumHeight = spectrum[i] * 4000 * WINDOW_HEIGHT;
-                        if (spectrumHeight > WINDOW_HEIGHT)
-                            spectrumHeight = WINDOW_HEIGHT;
-                        fprintf(stderr, "%d\n", spectrumHeight);
-                           
+                        spectrumHeight = spectrum[i] * 20 * WINDOW_WIDTH;
+                        if (spectrumHeight > WINDOW_WIDTH)
+                            spectrumHeight = WINDOW_WIDTH;
+                        for (j = 0 ; j < spectrumHeight ; j++) 
+                            pixels[i * WINDOW_WIDTH + j] = SDL_MapRGBA(format, (j / RATIO_COLOR), 255 - (j / RATIO_COLOR) , 0, 255);
                     }
-                }   
-                tempsPrecedent = tempsActuel;
+                }
+
+
+                if (0 != SDL_UpdateTexture(spectrumTxtr, NULL, pixels, sizeof(Uint32) * WINDOW_WIDTH)) {
+                    fprintf(stderr, "SDL_UpdateTexture Error : %s\n", SDL_GetError());
+                    goto QuitSDL;
+                }
+
+                SDL_RenderCopy(renderer, spectrumTxtr, NULL, NULL);
+
+                if (0 != SDL_RenderCopyEx(renderer, spectrumTxtr, NULL, NULL, 90, NULL, SDL_FLIP_VERTICAL | SDL_FLIP_HORIZONTAL)) {
+                    fprintf(stderr, "SDL_RenderCopyEx Error : %s\n", SDL_GetError());
+                    goto QuitSDL;
+                }
+
+                SDL_RenderPresent(renderer);
+
+                previousTime = time;
             }
             else 
-                SDL_Delay(25 - (tempsActuel - tempsPrecedent));
-
-            // Print the spectrum
-            spectrumTxtr = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH, WINDOW_HEIGHT);
-            if (spectrumTxtr == NULL) {
-                fprintf(stderr, "SDL_CreateTexture Error : %s\n", SDL_GetError());
-                goto QuitSDL;
-            }
-
-            format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
-
-            for (j = 0 ; j < WINDOW_WIDTH ; j++) {
-                for (k = 0 ; k < WINDOW_HEIGHT ; k++) {
-                    pixels[j * WINDOW_HEIGHT + k] = SDL_MapRGBA(format, 255 - (j / RATIO_COLOR), j /  RATIO_COLOR, 255, 255);
-                    
-                }
-            }
-
-            if (0 != SDL_UpdateTexture(spectrumTxtr, NULL, pixels, sizeof(Uint32) * WINDOW_WIDTH)) {
-                fprintf(stderr, "SDL_UpdateTexture Error : %s\n", SDL_GetError());
-                goto QuitSDL;
-            }
-
-            SDL_FreeFormat(format);
-
-            SDL_RenderCopy(renderer, spectrumTxtr, NULL, NULL);
-
-            SDL_RenderPresent(renderer);
+                SDL_Delay(25 - (time - previousTime));
 
         }
 
@@ -230,6 +234,7 @@ QuitFMOD:
     FMOD_System_Release(system);
 
 QuitSDL:
+    SDL_FreeFormat(format);
     SDL_DestroyTexture(spectrumTxtr);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
