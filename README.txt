@@ -9,7 +9,7 @@ SDL2.0.8
 You just have to put a file named "music.mp3" in the directory of the .out
 Then it will go
 
-Works on GNU Linux
+Compilated for GNU Linux
 
 --------------------------------------------------
 
@@ -25,4 +25,4 @@ Il suffit de placer un fichier nommé "music.mp3" dans le même repértoire que
 le .out
 Ensuite il ne reste plus qu'à regarder
 
-Codé pour GNU Linux
+Compilé pour GNU Linux
