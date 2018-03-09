@@ -14,21 +14,29 @@
 #include <FMOD/fmod.h>
 #include <FMOD/fmod_errors.h>
 
-#define WINDOW_WEIGHT         800
-#define WINDOW_HEIGHT         600
-#define SPECTRUM_ARRAY_SIZE   2048 
+#define WINDOW_WIDTH          1024
+#define WINDOW_HEIGHT         800
+#define SPECTRUM_ARRAY_SIZE   1024
+#define RATIO_COLOR           (WINDOW_WIDTH / 255)
 
 int main(int argc, char *argv[]) {
 
     int                     exitStatus = EXIT_FAILURE;
     int                     i = 0;
     int                     tempsPrecedent = 0, tempsActuel = 0;
+    int                     pitch = 0;
+    int                     spectrumHeight = 0;
+    size_t                  j = 0, k = 0;
+    void                    *tmp;
+    float                   spectrum[SPECTRUM_ARRAY_SIZE] = {0};
+    Uint32                  pixels[WINDOW_WIDTH * WINDOW_HEIGHT];
 
     SDL_Window              *window = NULL;
     SDL_Renderer            *renderer = NULL;
-    SDL_Rect                screen = {0, 0, WINDOW_WEIGHT, WINDOW_HEIGHT};
     SDL_Event               event;
     SDL_bool                quit = SDL_FALSE;
+    SDL_Texture             *spectrumTxtr = NULL;
+    SDL_PixelFormat         *format = NULL;
 
     FMOD_RESULT             result = 0;
     FMOD_SYSTEM             *system = NULL;
@@ -38,7 +46,6 @@ int main(int argc, char *argv[]) {
     FMOD_DSP                *fftDSP = NULL;
     FMOD_DSP_PARAMETER_FFT  *fftParam = NULL;
 
-    float                   spectrum[SPECTRUM_ARRAY_SIZE] = {0};
 
     // SDL Initialization & renderer & window & black screen 
     if (0 != SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -46,7 +53,7 @@ int main(int argc, char *argv[]) {
         goto QuitSDL;
     }
 
-    window = SDL_CreateWindow("Spectral Visualisation of Chinaski", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WEIGHT, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    window = SDL_CreateWindow("Spectral Visualisation of Chinaski", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
     if (window == NULL) {
         fprintf(stderr, "SDL_CreateWindow Error : %s\n", SDL_GetError());
         goto QuitSDL;
@@ -141,7 +148,7 @@ int main(int argc, char *argv[]) {
                                 goto QuitFMOD;
                             }
 
-                            // Get the Spectrum
+                            // Set the Spectrum
                             result = FMOD_Channel_AddDSP(channel0, 0, fftDSP);
                             if (result != FMOD_OK) {
                                 fprintf(stderr, "FMOD_Channel_AddDSP : %s\n", FMOD_ErrorString(result));
@@ -160,6 +167,7 @@ int main(int argc, char *argv[]) {
 
         if (isPlaying) {
             tempsActuel = SDL_GetTicks();
+            // Get the Spectrum
             if (tempsActuel - tempsPrecedent > 25) {
                 result = FMOD_DSP_GetParameterData(fftDSP, FMOD_DSP_FFT_SPECTRUMDATA, (void**)&fftParam, NULL, NULL, 0);
                 if (result != FMOD_OK) {
@@ -170,17 +178,48 @@ int main(int argc, char *argv[]) {
                 if (*fftParam->spectrum != NULL) {
                     for (i = 0 ; i < SPECTRUM_ARRAY_SIZE ; i++) {
                         spectrum[i] = (fftParam->spectrum[0][i] + fftParam->spectrum[1][i] / 2);
-                        fprintf(stderr, "%f\n", 20 * spectrum[i]);  
+                        spectrumHeight = spectrum[i] * 4000 * WINDOW_HEIGHT;
+                        if (spectrumHeight > WINDOW_HEIGHT)
+                            spectrumHeight = WINDOW_HEIGHT;
+                        fprintf(stderr, "%d\n", spectrumHeight);
+                           
                     }
                 }   
                 tempsPrecedent = tempsActuel;
             }
             else 
                 SDL_Delay(25 - (tempsActuel - tempsPrecedent));
+
+            // Print the spectrum
+            spectrumTxtr = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH, WINDOW_HEIGHT);
+            if (spectrumTxtr == NULL) {
+                fprintf(stderr, "SDL_CreateTexture Error : %s\n", SDL_GetError());
+                goto QuitSDL;
+            }
+
+            format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
+
+            for (j = 0 ; j < WINDOW_WIDTH ; j++) {
+                for (k = 0 ; k < WINDOW_HEIGHT ; k++) {
+                    pixels[j * WINDOW_HEIGHT + k] = SDL_MapRGBA(format, 255 - (j / RATIO_COLOR), j /  RATIO_COLOR, 255, 255);
+                    
+                }
+            }
+
+            if (0 != SDL_UpdateTexture(spectrumTxtr, NULL, pixels, sizeof(Uint32) * WINDOW_WIDTH)) {
+                fprintf(stderr, "SDL_UpdateTexture Error : %s\n", SDL_GetError());
+                goto QuitSDL;
+            }
+
+            SDL_FreeFormat(format);
+
+            SDL_RenderCopy(renderer, spectrumTxtr, NULL, NULL);
+
+            SDL_RenderPresent(renderer);
+
         }
 
         SDL_Delay(25);
-        
     }
 
     exitStatus = EXIT_SUCCESS;
@@ -191,6 +230,7 @@ QuitFMOD:
     FMOD_System_Release(system);
 
 QuitSDL:
+    SDL_DestroyTexture(spectrumTxtr);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
