@@ -118,49 +118,48 @@ int main(int argc, char *argv[]) {
 
     result = FMOD_DSP_SetParameterInt(fftDSP, FMOD_DSP_FFT_WINDOWSIZE, SPECTRUM_ARRAY_SIZE * 2);
     if (result != FMOD_OK) {
-        fprintf(stderr, "FMOD_SetParameterInt Error : %s\n", FMOD_ErrorString(result));
-        goto QuitFMOD;
+    	fprintf(stderr, "FMOD_SetParameterInt Error : %s\n", FMOD_ErrorString(result));
+    	goto QuitFMOD;
     }
-    // Load, play and send the mp3 to the channel
+                            // Load, play and send the mp3 to the channel
     result = FMOD_System_CreateSound(system, "hype_home.mp3", FMOD_CREATESTREAM, NULL, &music);
     if (result != FMOD_OK) {
-        fprintf(stderr, "FMOD_System_CreateSound Error : %s\n", FMOD_ErrorString(result));
-        goto QuitFMOD;
+    	fprintf(stderr, "FMOD_System_CreateSound Error : %s\n", FMOD_ErrorString(result));
+    	goto QuitFMOD;
     }
 
     result = FMOD_System_PlaySound(system, music, NULL, 0, &channel0);
     if (result != FMOD_OK) {
-        fprintf(stderr, "FMOD_System_PlaySound Error : %s\n", FMOD_ErrorString(result));
-        goto QuitFMOD;
+    	fprintf(stderr, "FMOD_System_PlaySound Error : %s\n", FMOD_ErrorString(result));
+    	goto QuitFMOD;
     }
 
     result = FMOD_Channel_IsPlaying(channel0, &isPlaying);
     if (result != FMOD_OK) {
-        fprintf(stderr, "FMOD_Channel_IsPlaying Error : %s\n", FMOD_ErrorString(result));
-        goto QuitFMOD;
+    	fprintf(stderr, "FMOD_Channel_IsPlaying Error : %s\n", FMOD_ErrorString(result));
+    	goto QuitFMOD;
     }
 
-    // Set the Spectrum
+                            // Set the Spectrum
     result = FMOD_Channel_AddDSP(channel0, 0, fftDSP);
     if (result != FMOD_OK) {
-        fprintf(stderr, "FMOD_Channel_AddDSP : %s\n", FMOD_ErrorString(result));
-        goto QuitFMOD;
+    	fprintf(stderr, "FMOD_Channel_AddDSP : %s\n", FMOD_ErrorString(result));
+    	goto QuitFMOD;
     }
 
     result = FMOD_DSP_SetActive(fftDSP, 1);
     if (result != FMOD_OK) {
-        fprintf(stderr, "FMOD_DSP_SetActive : %s\n", FMOD_ErrorString(result));
-        goto QuitFMOD;
+    	fprintf(stderr, "FMOD_DSP_SetActive : %s\n", FMOD_ErrorString(result));
+    	goto QuitFMOD;
     }
-
+    
     while(!quit) {
+    	for (i = 0 ; i < WINDOW_WIDTH * WINDOW_HEIGHT ; i++) 
+    		pixels[i] = SDL_MapRGBA(format, 0, 0, 0, 255);
 
-        for (i = 0 ; i < WINDOW_WIDTH * WINDOW_HEIGHT ; i++) 
-            pixels[i] = SDL_MapRGBA(format, 0, 0, 0, 255);
-
-        if (0 != SDL_UpdateTexture(spectrumTxtr, NULL, pixels, sizeof(Uint32) * WINDOW_WIDTH)) {
-            fprintf(stderr, "SDL_UpdateTexture Error : %s\n", SDL_GetError());
-            goto QuitSDL;
+    	if (0 != SDL_UpdateTexture(spectrumTxtr, NULL, pixels, sizeof(Uint32) * WINDOW_WIDTH)) {
+    		fprintf(stderr, "SDL_UpdateTexture Error : %s\n", SDL_GetError());
+    		goto QuitSDL;
         }
         SDL_RenderCopy(renderer, spectrumTxtr, NULL, NULL);
 
@@ -175,12 +174,10 @@ int main(int argc, char *argv[]) {
                             quit = SDL_TRUE;
                             break;
                     }
-
             }
         }
 
         if (isPlaying) {
-
             time = SDL_GetTicks();
             // Get the Spectrum
             if (time - previousTime > 25) {
@@ -197,10 +194,9 @@ int main(int argc, char *argv[]) {
                         if (spectrumHeight > WINDOW_WIDTH)
                             spectrumHeight = WINDOW_WIDTH;
                         for (j = 0 ; j < spectrumHeight ; j++) 
-                            pixels[i * WINDOW_WIDTH + j] = SDL_MapRGBA(format, (j / RATIO_COLOR), 255 - (j / RATIO_COLOR) , 0, 255);
+                            pixels[i * WINDOW_WIDTH + j] = SDL_MapRGBA(format, (j / RATIO_COLOR), 255 - (j / RATIO_COLOR) , 255, 255);
                     }
                 }
-
 
                 if (0 != SDL_UpdateTexture(spectrumTxtr, NULL, pixels, sizeof(Uint32) * WINDOW_WIDTH)) {
                     fprintf(stderr, "SDL_UpdateTexture Error : %s\n", SDL_GetError());
@@ -220,12 +216,9 @@ int main(int argc, char *argv[]) {
             }
             else 
                 SDL_Delay(25 - (time - previousTime));
-
         }
-
         SDL_Delay(25);
     }
-
     exitStatus = EXIT_SUCCESS;
 
 QuitFMOD:
@@ -243,4 +236,3 @@ QuitSDL:
     fprintf(stderr, "%d\n", exitStatus);
     return exitStatus;
 }
-
